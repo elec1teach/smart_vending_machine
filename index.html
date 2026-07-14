@@ -105,7 +105,6 @@
         }
 
         .product-grid {
-            /* เปลี่ยนเป็นแบบเน้นแสดงผลตรงกลาง เพราะมีแค่ 2 สินค้า */
             display: flex;
             justify-content: center;
             gap: 30px;
@@ -118,7 +117,7 @@
             padding: 20px;
             text-align: center;
             transition: all 0.3s;
-            width: 250px; /* เพิ่มความกว้างให้ดูสวยงามขึ้นเมื่อมีแค่ 2 กล่อง */
+            width: 250px; 
         }
 
         .product-card:hover {
@@ -223,8 +222,32 @@
         </section>
     </div>
 
+    <!-- นำเข้า Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
     <script>
-        // 1. ตั้งค่าข้อมูลสินค้า (ใช้ Array เก็บ Object ของสินค้าแต่ละตัว)
+        // -----------------------------------------
+        // 1. ตั้งค่า Firebase Configuration
+        // -----------------------------------------
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // เริ่มต้นระบบ Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        let currentOrderRef = null;
+
+        // -----------------------------------------
+        // 2. ข้อมูลสินค้าและการจัดการ UI
+        // -----------------------------------------
         const products = [
             { slot: 1, name: "Coke", price: 20, stock: 18 },
             { slot: 2, name: "Pepsi", price: 20, stock: 18 }
@@ -245,15 +268,12 @@
             logWindow.prepend(logLine);
         }
 
-        // 2. ฟังก์ชันสร้างช่องสินค้าจากข้อมูลใน Array
         function renderProducts() {
             productGrid.innerHTML = ''; 
             
-            // ใช้ .forEach เพื่อวนลูปอ่านข้อมูลสินค้าทีละตัว
             products.forEach(product => {
                 const card = document.createElement('div');
                 card.className = 'product-card';
-                // นำข้อมูลชื่อ (product.name) และอื่นๆ มาแสดงใน HTML
                 card.innerHTML = `
                     <h3 class="product-title">SLOT ${product.slot}: ${product.name}</h3>
                     <p class="product-info">Price: <span style="color:#00ff64">${product.price}฿</span></p>
@@ -265,7 +285,74 @@
             addLog(`System initialized with ${products.length} products (Coke & Pepsi).`);
         }
 
-        // 3. ฟังก์ชันการซื้อ รับพารามิเตอร์ชื่อสินค้า (name) เพิ่มเข้ามา
+        function resetDashboard() {
+            orderID.textContent = '-';
+            orderSlot.textContent = '-';
+            orderPrice.textContent = '0 THB';
+            orderStatus.textContent = 'READY';
+            orderStatus.style.color = 'var(--neon-blue)';
+            qrBox.innerHTML = `<span>SELECT ITEM<br>TO SHOW QR</span>`;
+            qrBox.style.background = 'rgba(0,0,0,0.3)';
+        }
+
+        // -----------------------------------------
+        // 3. ฟังก์ชันการทำงานร่วมกับ Firebase
+        // -----------------------------------------
+        function createOrderInFirebase(txnId, slot, name, price) {
+            currentOrderRef = database.ref('orders/' + txnId);
+            
+            // บันทึกข้อมูลลงฐานข้อมูล
+            currentOrderRef.set({
+                slot: slot,
+                product: name,
+                price: price,
+                status: "waiting",
+                timestamp: Date.now()
+            });
+
+            addLog(`Firebase: Created order ${txnId} (Status: waiting)`);
+
+            // สั่งให้หน้าเว็บ "รอฟัง" การเปลี่ยนแปลงของสถานะนี้
+            listenForPaymentStatus(txnId, name, slot);
+        }
+
+        function listenForPaymentStatus(txnId, name, slot) {
+            currentOrderRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    if (data.status === 'paid') {
+                        // เมื่อ GAS (เฟส 3) เปลี่ยนสถานะเป็น paid
+                        orderStatus.textContent = 'PAYMENT SUCCESS';
+                        orderStatus.style.color = '#00ff64';
+                        qrBox.innerHTML = `<span style="color:#00ff64; font-weight:bold;">DISPENSING...</span>`;
+                        qrBox.style.background = 'transparent';
+                        
+                        // หักสต๊อกบนหน้าจอเมื่อจ่ายเงินสำเร็จ
+                        const stockElement = document.getElementById(`stock-${slot}`);
+                        let currentStock = parseInt(stockElement.textContent);
+                        stockElement.textContent = currentStock - 1;
+
+                        addLog(`Firebase: Status changed to 'paid'. Hardware is dispensing ${name}. Remaining stock: ${currentStock - 1}`);
+                    } 
+                    else if (data.status === 'success') {
+                        // เมื่อ ESP8266 จ่ายของเสร็จ (เฟส 4) เปลี่ยนสถานะเป็น success
+                        orderStatus.textContent = 'THANK YOU';
+                        addLog(`Firebase: Status 'success'. ${name} dispense complete.`);
+                        
+                        setTimeout(() => {
+                            resetDashboard();
+                        }, 3000);
+                        
+                        // เลิกฟังสเตตัสของออเดอร์นี้
+                        currentOrderRef.off();
+                    }
+                }
+            });
+        }
+
+        // -----------------------------------------
+        // 4. ฟังก์ชันจัดการการสั่งซื้อ (อัปเดตใหม่)
+        // -----------------------------------------
         function handleBuy(slot, name, price) {
             const stockElement = document.getElementById(`stock-${slot}`);
             let currentStock = parseInt(stockElement.textContent);
@@ -278,7 +365,7 @@
 
             const txnId = 'TXN' + Date.now().toString().slice(-6);
 
-            // อัปเดตหน้าจอ แสดงชื่อสินค้าด้วย
+            // อัปเดตหน้าจอ 
             orderID.textContent = txnId;
             orderSlot.textContent = `Slot ${slot} - ${name}`;
             orderPrice.textContent = `${price} THB`;
@@ -290,30 +377,8 @@
 
             addLog(`User selected ${name}. Created ${txnId}. Waiting for payment...`);
 
-            // จำลองการชำระเงินสำเร็จ
-            setTimeout(() => {
-                orderStatus.textContent = 'PAYMENT SUCCESS';
-                orderStatus.style.color = '#00ff64';
-                
-                currentStock--;
-                stockElement.textContent = currentStock;
-                
-                qrBox.innerHTML = `<span style="color:#00ff64; font-weight:bold;">DISPENSING...</span>`;
-                qrBox.style.background = 'transparent';
-                
-                addLog(`Payment for ${txnId} received. Dispensing ${name}. Remaining stock: ${currentStock}`);
-                
-                setTimeout(() => {
-                    orderID.textContent = '-';
-                    orderSlot.textContent = '-';
-                    orderPrice.textContent = '0 THB';
-                    orderStatus.textContent = 'READY';
-                    orderStatus.style.color = 'var(--neon-blue)';
-                    qrBox.innerHTML = `<span>SELECT ITEM<br>TO SHOW QR</span>`;
-                    addLog(`${name} dispense complete. Ready for next order.`);
-                }, 3000);
-
-            }, 5000);
+            // เรียกใช้การเชื่อมต่อ Firebase แทน setTimeout ตัวเดิม
+            createOrderInFirebase(txnId, slot, name, price);
         }
 
         window.onload = () => {
