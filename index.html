@@ -380,7 +380,7 @@
             addLog(`User selected ${name}. Requesting QR from GAS...`);
 
             // ⚠️ สำคัญมาก: นำ URL ของเว็บแอปจาก GAS มาวางแทนที่ข้อความด้านล่างนี้ ⚠️
-            const GAS_URL = "YOUR_GAS_WEBAPP_URL"; 
+            const GAS_URL = "https://script.google.com/macros/s/AKfycbyZwxtO4PKt4TZihckUmECkSe_JDh8LgLH3hO7zcC1KPlvdBB74RR6wsB01tMV3tqOifw/exec"; 
             
             // ยิงข้อมูลไปขอ QR Code จาก GAS
             fetch(`${GAS_URL}?amount=${price}&txnId=${txnId}`)
