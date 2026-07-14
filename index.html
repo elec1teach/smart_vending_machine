@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Smart Vending Machine</title>
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+
+<div class="container">
+
+    <!-- ================= HEADER ================= -->
+
+    <header>
+
+        <img src="images/logo.png" class="logo">
+
+        <h1>SMART VENDING MACHINE</h1>
+
+        <p>
+            ระบบตู้จำหน่ายสินค้าอัจฉริยะด้วย IoT
+        </p>
+
+    </header>
+
+    <!-- ================= MACHINE STATUS ================= -->
+
+    <section class="machine-panel">
+
+        <div class="status-card">
+
+            <h2>Machine Status</h2>
+
+            <div id="machineStatus">
+
+                READY
+
+            </div>
+
+        </div>
+
+        <div class="status-card">
+
+            <h2>Connection</h2>
+
+            <div id="onlineStatus">
+
+                OFFLINE
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- ================= PRODUCT ================= -->
+
+    <section class="product-grid">
+
+
+        <!-- Coke -->
+
+        <div class="product-card">
+
+            <img src="images/coke.png">
+
+            <h2>Coke</h2>
+
+            <p class="price">
+
+                ราคา <span id="cokePrice">20</span> บาท
+
+            </p>
+
+            <p>
+
+                คงเหลือ
+
+                <span id="cokeStock">
+
+                    18
+
+                </span>
+
+                ชิ้น
+
+            </p>
+
+            <button id="buyCoke">
+
+                ซื้อสินค้า
+
+            </button>
+
+        </div>
+
+
+
+        <!-- Pepsi -->
+
+        <div class="product-card">
+
+            <img src="images/pepsi.png">
+
+            <h2>Pepsi</h2>
+
+            <p class="price">
+
+                ราคา <span id="pepsiPrice">20</span> บาท
+
+            </p>
+
+            <p>
+
+                คงเหลือ
+
+                <span id="pepsiStock">
+
+                    18
+
+                </span>
+
+                ชิ้น
+
+            </p>
+
+            <button id="buyPepsi">
+
+                ซื้อสินค้า
+
+            </button>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- ================= CURRENT ORDER ================= -->
+
+    <section class="order-panel">
+
+        <h2>
+
+            Current Order
+
+        </h2>
+
+        <table>
+
+            <tr>
+
+                <td>Order ID</td>
+
+                <td id="orderID">
+
+                    -
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td>Product</td>
+
+                <td id="orderProduct">
+
+                    -
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td>Price</td>
+
+                <td id="orderPrice">
+
+                    -
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td>Status</td>
+
+                <td id="orderStatus">
+
+                    READY
+
+                </td>
+
+            </tr>
+
+        </table>
+
+    </section>
+
+
+
+    <!-- ================= PAYMENT ================= -->
+
+    <section class="payment-panel">
+
+        <h2>
+
+            PromptPay QR
+
+        </h2>
+
+        <div class="qr-box">
+
+            QR CODE
+
+        </div>
+
+        <p>
+
+            ระบบชำระเงินจะเปิดใช้งานใน Phase 4
+
+        </p>
+
+    </section>
+
+
+
+    <!-- ================= INVENTORY ================= -->
+
+    <section class="inventory-panel">
+
+        <h2>
+
+            Inventory
+
+        </h2>
+
+        <table>
+
+            <tr>
+
+                <th>Product</th>
+
+                <th>Stock</th>
+
+            </tr>
+
+            <tr>
+
+                <td>Coke</td>
+
+                <td id="stock1">
+
+                    18
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td>Pepsi</td>
+
+                <td id="stock2">
+
+                    18
+
+                </td>
+
+            </tr>
+
+        </table>
+
+    </section>
+
+
+
+    <!-- ================= LOG ================= -->
+
+    <section class="log-panel">
+
+        <h2>
+
+            Activity Log
+
+        </h2>
+
+        <div id="logWindow">
+
+            Waiting...
+
+        </div>
+
+    </section>
+
+
+
+    <!-- ================= FOOTER ================= -->
+
+    <footer>
+
+        Smart Vending Machine V1
+
+        <br>
+
+        ESP8266 • Firebase • GitHub Pages
+
+    </footer>
+
+</div>
+
+<script type="module" src="firebase.js"></script>
+
+<script type="module" src="app.js"></script>
+
+</body>
+</html>
