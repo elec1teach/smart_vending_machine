@@ -102,6 +102,7 @@
             text-align: center;
             color: rgba(255,255,255,0.5);
             background: rgba(0,0,0,0.3);
+            overflow: hidden; /* ป้องกันรูปภาพล้นขอบ */
         }
 
         .product-grid {
@@ -321,7 +322,7 @@
                 const data = snapshot.val();
                 if (data) {
                     if (data.status === 'paid') {
-                        // เมื่อ GAS (เฟส 3) เปลี่ยนสถานะเป็น paid
+                        // เมื่อ GAS (หรือจำลอง) เปลี่ยนสถานะเป็น paid
                         orderStatus.textContent = 'PAYMENT SUCCESS';
                         orderStatus.style.color = '#00ff64';
                         qrBox.innerHTML = `<span style="color:#00ff64; font-weight:bold;">DISPENSING...</span>`;
@@ -335,7 +336,7 @@
                         addLog(`Firebase: Status changed to 'paid'. Hardware is dispensing ${name}. Remaining stock: ${currentStock - 1}`);
                     } 
                     else if (data.status === 'success') {
-                        // เมื่อ ESP8266 จ่ายของเสร็จ (เฟส 4) เปลี่ยนสถานะเป็น success
+                        // เมื่อ ESP8266 จ่ายของเสร็จ เปลี่ยนสถานะเป็น success
                         orderStatus.textContent = 'THANK YOU';
                         addLog(`Firebase: Status 'success'. ${name} dispense complete.`);
                         
@@ -351,7 +352,7 @@
         }
 
         // -----------------------------------------
-        // 4. ฟังก์ชันจัดการการสั่งซื้อ (อัปเดตใหม่)
+        // 4. ฟังก์ชันจัดการการสั่งซื้อ (เชื่อมต่อ GAS API)
         // -----------------------------------------
         function handleBuy(slot, name, price) {
             const stockElement = document.getElementById(`stock-${slot}`);
@@ -372,13 +373,35 @@
             orderStatus.textContent = 'WAITING PAYMENT';
             orderStatus.style.color = 'var(--neon-pink)';
 
-            qrBox.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=PromptPay_${price}THB" alt="QR Code">`;
-            qrBox.style.background = 'white';
+            // เปลี่ยนสถานะ QR Box ให้แสดงว่ากำลังโหลด
+            qrBox.innerHTML = `<span style="color:var(--neon-blue);">GENERATING QR...</span>`;
+            qrBox.style.background = 'rgba(0,0,0,0.3)';
 
-            addLog(`User selected ${name}. Created ${txnId}. Waiting for payment...`);
+            addLog(`User selected ${name}. Requesting QR from GAS...`);
 
-            // เรียกใช้การเชื่อมต่อ Firebase แทน setTimeout ตัวเดิม
-            createOrderInFirebase(txnId, slot, name, price);
+            // ⚠️ สำคัญมาก: นำ URL ของเว็บแอปจาก GAS มาวางแทนที่ข้อความด้านล่างนี้ ⚠️
+            const GAS_URL = "YOUR_GAS_WEBAPP_URL"; 
+            
+            // ยิงข้อมูลไปขอ QR Code จาก GAS
+            fetch(`${GAS_URL}?amount=${price}&txnId=${txnId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if(data.status === "success") {
+                        // เมื่อได้ QR Code กลับมา ให้นำมาแสดงที่หน้าเว็บ
+                        qrBox.innerHTML = `<img src="${data.qrUrl}" alt="PromptPay QR Code" style="max-width:100%; max-height:100%;">`;
+                        qrBox.style.background = 'white';
+                        addLog(`QR Generated for ${txnId}. Waiting for customer to scan.`);
+                        
+                        // สร้าง Order ลง Firebase เพื่อรอฟังสถานะการจ่ายเงิน
+                        createOrderInFirebase(txnId, slot, name, price);
+                    } else {
+                        addLog(`Error from GAS: ${data.error}`);
+                    }
+                })
+                .catch(error => {
+                    addLog(`Fetch Error: ${error}`);
+                    qrBox.innerHTML = `<span style="color:red;">ERROR LOADING QR</span>`;
+                });
         }
 
         window.onload = () => {
