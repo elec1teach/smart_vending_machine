@@ -102,7 +102,27 @@
             text-align: center;
             color: rgba(255,255,255,0.5);
             background: rgba(0,0,0,0.3);
-            overflow: hidden; /* ป้องกันรูปภาพล้นขอบ */
+            overflow: hidden; 
+            margin-bottom: 15px;
+        }
+
+        /* ตกแต่งส่วนอัปโหลดสลิป */
+        .slip-upload-section {
+            display: none; /* ซ่อนไว้ก่อน จะโชว์เมื่อ QR มา */
+            text-align: center;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .neon-file-input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--neon-blue);
+            color: var(--neon-blue);
+            border-radius: 4px;
+            font-family: 'Share Tech Mono', monospace;
         }
 
         .product-grid {
@@ -203,6 +223,14 @@
                 <div id="qrBox" class="qr-placeholder">
                     <span>SELECT ITEM<br>TO SHOW QR</span>
                 </div>
+                
+                <!-- ส่วนอัปโหลดสลิปที่เพิ่มเข้ามาใหม่ -->
+                <div id="slipUploadSection" class="slip-upload-section">
+                    <p style="font-size: 0.9rem; margin-bottom: 8px; color: var(--neon-pink);">UPLOAD SLIP (โอนแล้วแนบสลิปที่นี่)</p>
+                    <input type="file" id="slipFile" accept="image/*" class="neon-file-input">
+                    <button onclick="uploadSlipToServer()" class="btn-buy" style="margin-top: 5px;">VERIFY SLIP</button>
+                    <p id="uploadStatus" style="color: var(--neon-blue); margin-top: 10px; font-weight: bold; font-size: 0.9rem;"></p>
+                </div>
             </section>
         </div>
 
@@ -229,6 +257,14 @@
 
     <script>
         // -----------------------------------------
+        // ตัวแปร Global ของระบบ
+        // -----------------------------------------
+        // ⚠️ นำ URL ของเว็บแอปจาก GAS มาวางแทนที่ข้อความด้านล่างนี้ ⚠️
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbwpDuyWL9Dbk6A5veRDi-2MPgPl8WdUhlUCNtNF3RzMPqeg5lUvWTRoj-23Ybkt7R3ABQ/exec"; 
+        let currentTxnId = ""; // ตัวแปรเก็บรหัสออเดอร์ปัจจุบัน
+        let currentOrderRef = null;
+
+        // -----------------------------------------
         // 1. ตั้งค่า Firebase Configuration
         // -----------------------------------------
         const firebaseConfig = {
@@ -241,10 +277,8 @@
            appId: "1:443783652574:web:53732ad9907c9f42470e4f"
         };
 
-        // เริ่มต้นระบบ Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        let currentOrderRef = null;
 
         // -----------------------------------------
         // 2. ข้อมูลสินค้าและการจัดการ UI
@@ -261,6 +295,11 @@
         const orderPrice = document.getElementById('orderPrice');
         const orderStatus = document.getElementById('orderStatus');
         const qrBox = document.getElementById('qrBox');
+        
+        // Element ของส่วน Slip Upload
+        const slipUploadSection = document.getElementById('slipUploadSection');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const slipFile = document.getElementById('slipFile');
 
         function addLog(message) {
             const time = new Date().toLocaleTimeString('th-TH');
@@ -294,6 +333,12 @@
             orderStatus.style.color = 'var(--neon-blue)';
             qrBox.innerHTML = `<span>SELECT ITEM<br>TO SHOW QR</span>`;
             qrBox.style.background = 'rgba(0,0,0,0.3)';
+            
+            // รีเซ็ตส่วนอัปโหลดสลิป
+            currentTxnId = "";
+            slipUploadSection.style.display = 'none';
+            uploadStatus.innerText = "";
+            slipFile.value = "";
         }
 
         // -----------------------------------------
@@ -302,7 +347,6 @@
         function createOrderInFirebase(txnId, slot, name, price) {
             currentOrderRef = database.ref('orders/' + txnId);
             
-            // บันทึกข้อมูลลงฐานข้อมูล
             currentOrderRef.set({
                 slot: slot,
                 product: name,
@@ -312,8 +356,6 @@
             });
 
             addLog(`Firebase: Created order ${txnId} (Status: waiting)`);
-
-            // สั่งให้หน้าเว็บ "รอฟัง" การเปลี่ยนแปลงของสถานะนี้
             listenForPaymentStatus(txnId, name, slot);
         }
 
@@ -322,21 +364,21 @@
                 const data = snapshot.val();
                 if (data) {
                     if (data.status === 'paid') {
-                        // เมื่อ GAS (หรือจำลอง) เปลี่ยนสถานะเป็น paid
                         orderStatus.textContent = 'PAYMENT SUCCESS';
                         orderStatus.style.color = '#00ff64';
                         qrBox.innerHTML = `<span style="color:#00ff64; font-weight:bold;">DISPENSING...</span>`;
                         qrBox.style.background = 'transparent';
                         
-                        // หักสต๊อกบนหน้าจอเมื่อจ่ายเงินสำเร็จ
+                        // ซ่อนปุ่มอัปโหลดสลิปทันทีที่จ่ายสำเร็จ
+                        slipUploadSection.style.display = 'none';
+                        
                         const stockElement = document.getElementById(`stock-${slot}`);
                         let currentStock = parseInt(stockElement.textContent);
                         stockElement.textContent = currentStock - 1;
 
-                        addLog(`Firebase: Status changed to 'paid'. Hardware is dispensing ${name}. Remaining stock: ${currentStock - 1}`);
+                        addLog(`Firebase: Status 'paid'. Hardware is dispensing ${name}.`);
                     } 
                     else if (data.status === 'success') {
-                        // เมื่อ ESP8266 จ่ายของเสร็จ เปลี่ยนสถานะเป็น success
                         orderStatus.textContent = 'THANK YOU';
                         addLog(`Firebase: Status 'success'. ${name} dispense complete.`);
                         
@@ -344,7 +386,6 @@
                             resetDashboard();
                         }, 3000);
                         
-                        // เลิกฟังสเตตัสของออเดอร์นี้
                         currentOrderRef.off();
                     }
                 }
@@ -352,7 +393,7 @@
         }
 
         // -----------------------------------------
-        // 4. ฟังก์ชันจัดการการสั่งซื้อ (เชื่อมต่อ GAS API)
+        // 4. ฟังก์ชันจัดการการสั่งซื้อ
         // -----------------------------------------
         function handleBuy(slot, name, price) {
             const stockElement = document.getElementById(`stock-${slot}`);
@@ -364,36 +405,36 @@
                 return;
             }
 
-            const txnId = 'TXN' + Date.now().toString().slice(-6);
+            // สร้างรหัสออเดอร์และเก็บไว้ใน Global Variable
+            currentTxnId = 'TXN' + Date.now().toString().slice(-6);
 
-            // อัปเดตหน้าจอ 
-            orderID.textContent = txnId;
+            orderID.textContent = currentTxnId;
             orderSlot.textContent = `Slot ${slot} - ${name}`;
             orderPrice.textContent = `${price} THB`;
             orderStatus.textContent = 'WAITING PAYMENT';
             orderStatus.style.color = 'var(--neon-pink)';
 
-            // เปลี่ยนสถานะ QR Box ให้แสดงว่ากำลังโหลด
             qrBox.innerHTML = `<span style="color:var(--neon-blue);">GENERATING QR...</span>`;
             qrBox.style.background = 'rgba(0,0,0,0.3)';
+            
+            // ซ่อนปุ่มอัปโหลดสลิปไว้ก่อนระหว่างรอโหลด QR
+            slipUploadSection.style.display = 'none';
 
             addLog(`User selected ${name}. Requesting QR from GAS...`);
-
-            // ⚠️ สำคัญมาก: นำ URL ของเว็บแอปจาก GAS มาวางแทนที่ข้อความด้านล่างนี้ ⚠️
-            const GAS_URL = "https://script.google.com/macros/s/AKfycbwpDuyWL9Dbk6A5veRDi-2MPgPl8WdUhlUCNtNF3RzMPqeg5lUvWTRoj-23Ybkt7R3ABQ/exec"; 
             
-            // ยิงข้อมูลไปขอ QR Code จาก GAS
-            fetch(`${GAS_URL}?amount=${price}&txnId=${txnId}`)
+            // ขอ QR Code จาก GAS
+            fetch(`${GAS_URL}?amount=${price}&txnId=${currentTxnId}`)
                 .then(response => response.json())
                 .then(data => {
                     if(data.status === "success") {
-                        // เมื่อได้ QR Code กลับมา ให้นำมาแสดงที่หน้าเว็บ
                         qrBox.innerHTML = `<img src="${data.qrUrl}" alt="PromptPay QR Code" style="max-width:100%; max-height:100%;">`;
                         qrBox.style.background = 'white';
-                        addLog(`QR Generated for ${txnId}. Waiting for customer to scan.`);
+                        addLog(`QR Generated for ${currentTxnId}. Waiting for customer to scan.`);
                         
-                        // สร้าง Order ลง Firebase เพื่อรอฟังสถานะการจ่ายเงิน
-                        createOrderInFirebase(txnId, slot, name, price);
+                        // แสดงปุ่มอัปโหลดสลิปเมื่อ QR พร้อมแล้ว
+                        slipUploadSection.style.display = 'block';
+                        
+                        createOrderInFirebase(currentTxnId, slot, name, price);
                     } else {
                         addLog(`Error from GAS: ${data.error}`);
                     }
@@ -402,6 +443,69 @@
                     addLog(`Fetch Error: ${error}`);
                     qrBox.innerHTML = `<span style="color:red;">ERROR LOADING QR</span>`;
                 });
+        }
+
+        // -----------------------------------------
+        // 5. ฟังก์ชันอัปโหลดและตรวจสอบสลิป (ใหม่!)
+        // -----------------------------------------
+        function uploadSlipToServer() {
+            if (slipFile.files.length === 0) {
+                uploadStatus.style.color = "red";
+                uploadStatus.innerText = "กรุณาเลือกไฟล์สลิปก่อนครับ";
+                return;
+            }
+
+            if (!currentTxnId) {
+                uploadStatus.style.color = "red";
+                uploadStatus.innerText = "ไม่พบรายการสั่งซื้อ กรุณากดเลือกสินค้าใหม่";
+                return;
+            }
+
+            const file = slipFile.files[0];
+            const reader = new FileReader();
+
+            uploadStatus.style.color = "var(--neon-blue)";
+            uploadStatus.innerText = "กำลังตรวจสอบสลิป... กรุณารอสักครู่";
+            addLog(`Reading slip image for ${currentTxnId}...`);
+
+            // เมื่อ FileReader อ่านไฟล์เสร็จ จะทำงานในนี้
+            reader.onload = function(event) {
+                // ตัดเอาเฉพาะส่วนข้อมูล Base64 บริสุทธิ์
+                const base64Data = event.target.result.split(',')[1]; 
+
+                addLog("Sending slip image to GAS for verification...");
+
+                // ยิงข้อมูลไปที่ GAS_URL เดิม แต่ใช้แบบ POST Request
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'verifySlip',
+                        image: base64Data,
+                        txnId: currentTxnId
+                    })
+                })
+                .then(res => res.json())
+                .then(response => {
+                    if(response.success) {
+                        uploadStatus.style.color = "#00ff64";
+                        uploadStatus.innerText = "✅ ตรวจสอบสำเร็จ! ตู้กำลังจ่ายสินค้า...";
+                        slipUploadSection.style.display = 'none'; // ซ่อนปุ่มอัปโหลด
+                        addLog(`Slip verified successfully!`);
+                    } else {
+                        uploadStatus.style.color = "red";
+                        uploadStatus.innerText = "❌ เกิดข้อผิดพลาด: " + response.message;
+                        addLog(`Slip verification failed: ${response.message}`);
+                    }
+                })
+                .catch(err => {
+                    uploadStatus.style.color = "red";
+                    uploadStatus.innerText = "❌ การเชื่อมต่อขัดข้อง กรุณาลองใหม่";
+                    addLog(`Upload Error: ${err}`);
+                });
+            };
+            
+            // สั่งให้อ่านไฟล์ในรูปแบบ Data URL
+            reader.readAsDataURL(file);
         }
 
         window.onload = () => {
