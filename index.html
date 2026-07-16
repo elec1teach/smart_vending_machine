@@ -225,10 +225,13 @@
                     <span>SELECT ITEM<br>TO SHOW QR</span>
                 </div>
 
-                <!-- 🌟 ส่วนสำหรับปุ่มบันทึก QR Code (เพิ่มใหม่) 🌟 -->
+                <!-- 🌟 ส่วนสำหรับปุ่มดำเนินการกับ QR Code 🌟 -->
                 <div id="qrActionSection" style="display: none; text-align: center; margin-bottom: 15px;">
-                    <p style="font-size: 0.85rem; color: #aaa; margin-bottom: 8px;">💡 แตะค้างที่รูปภาพ หรือกดปุ่มด้านล่างเพื่อบันทึก QR</p>
-                    <button id="btnDownloadQR" class="btn-buy" style="margin-top: 0; padding: 8px 15px; font-size: 1rem; width: 85%;">⬇️ ดาวน์โหลด QR Code</button>
+                    <p style="font-size: 0.85rem; color: #aaa; margin-bottom: 8px;">💡 เลือกวิธีชำระเงินที่สะดวกที่สุด</p>
+                    <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 10px;">
+                        <button id="btnDownloadQR" class="btn-buy" style="margin-top: 0; padding: 8px; font-size: 0.9rem;">⬇️ เซฟ QR Code</button>
+                        <button id="btnCopyPromptPay" class="btn-buy" style="margin-top: 0; padding: 8px; font-size: 0.9rem;">📋 ก๊อปปี้พร้อมเพย์</button>
+                    </div>
                 </div>
                 
                 <!-- ส่วนอัปโหลดสลิป -->
@@ -344,7 +347,7 @@
             
             currentTxnId = "";
             slipUploadSection.style.display = 'none';
-            qrActionSection.style.display = 'none'; // ซ่อนปุ่มโหลด QR ด้วย
+            qrActionSection.style.display = 'none'; // ซ่อนกลุ่มปุ่ม QR 
             uploadStatus.innerText = "";
             slipFile.value = "";
         }
@@ -378,7 +381,7 @@
                         qrBox.style.background = 'transparent';
                         
                         slipUploadSection.style.display = 'none';
-                        qrActionSection.style.display = 'none'; // ซ่อนเมื่อสำเร็จ
+                        qrActionSection.style.display = 'none'; // ซ่อนปุ่มเมื่อจ่ายเสร็จ
                         
                         const stockElement = document.getElementById(`stock-${slot}`);
                         let currentStock = parseInt(stockElement.textContent);
@@ -438,21 +441,33 @@
                         qrBox.style.background = 'white';
                         addLog(`QR Generated for ${currentTxnId}. Waiting for customer to scan.`);
                         
-                        // แสดงปุ่มดำเนินการ
+                        // แสดงกลุ่มปุ่มดำเนินการ
                         slipUploadSection.style.display = 'block';
                         qrActionSection.style.display = 'block';
                         
-                        // ตั้งค่าคำสั่งให้ปุ่มดาวน์โหลด
+                        // 1. ตั้งค่าคำสั่งให้ปุ่มดาวน์โหลด (เซฟรูป)
                         btnDownloadQR.onclick = function() {
-                            // สร้าง link โหลด/เปิดรูปภาพ
                             const a = document.createElement('a');
                             a.href = data.qrUrl;
                             a.download = `PromptPay_${currentTxnId}.png`;
-                            a.target = '_blank'; // สำหรับเปิดแท็บใหม่บนมือถือในกรณีที่เบราว์เซอร์กันการดาวน์โหลด
+                            a.target = '_blank';
                             document.body.appendChild(a);
                             a.click();
                             document.body.removeChild(a);
                             addLog(`User clicked download QR for ${currentTxnId}`);
+                        };
+
+                        // 2. ตั้งค่าคำสั่งให้ปุ่มคัดลอกเลขพร้อมเพย์
+                        const btnCopyPromptPay = document.getElementById('btnCopyPromptPay');
+                        btnCopyPromptPay.onclick = function() {
+                            const promptPayNumber = "0818768608"; // เบอร์พร้อมเพย์ของคุณ
+                            navigator.clipboard.writeText(promptPayNumber).then(() => {
+                                alert(`✅ คัดลอกเบอร์พร้อมเพย์ ${promptPayNumber} สำเร็จ!\n\nยอดเงินที่ต้องโอนคือ: ${price} บาท\nคุณสามารถเปิดแอปธนาคารเพื่อวางเบอร์และโอนเงินได้เลยครับ`);
+                                addLog(`User copied PromptPay number.`);
+                            }).catch(err => {
+                                addLog(`Copy Error: ${err}`);
+                                alert('ไม่สามารถคัดลอกอัตโนมัติได้ กรุณาทำรายการด้วยการเซฟ QR Code ครับ');
+                            });
                         };
                         
                         createOrderInFirebase(currentTxnId, slot, name, price);
