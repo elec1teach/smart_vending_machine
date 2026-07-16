@@ -104,6 +104,7 @@
             background: rgba(0,0,0,0.3);
             overflow: hidden; 
             margin-bottom: 15px;
+            border-radius: 8px;
         }
 
         /* ตกแต่งส่วนอัปโหลดสลิป */
@@ -223,8 +224,14 @@
                 <div id="qrBox" class="qr-placeholder">
                     <span>SELECT ITEM<br>TO SHOW QR</span>
                 </div>
+
+                <!-- 🌟 ส่วนสำหรับปุ่มบันทึก QR Code (เพิ่มใหม่) 🌟 -->
+                <div id="qrActionSection" style="display: none; text-align: center; margin-bottom: 15px;">
+                    <p style="font-size: 0.85rem; color: #aaa; margin-bottom: 8px;">💡 แตะค้างที่รูปภาพ หรือกดปุ่มด้านล่างเพื่อบันทึก QR</p>
+                    <button id="btnDownloadQR" class="btn-buy" style="margin-top: 0; padding: 8px 15px; font-size: 1rem; width: 85%;">⬇️ ดาวน์โหลด QR Code</button>
+                </div>
                 
-                <!-- ส่วนอัปโหลดสลิปที่เพิ่มเข้ามาใหม่ -->
+                <!-- ส่วนอัปโหลดสลิป -->
                 <div id="slipUploadSection" class="slip-upload-section">
                     <p style="font-size: 0.9rem; margin-bottom: 8px; color: var(--neon-pink);">UPLOAD SLIP (โอนแล้วแนบสลิปที่นี่)</p>
                     <input type="file" id="slipFile" accept="image/*" class="neon-file-input">
@@ -259,9 +266,8 @@
         // -----------------------------------------
         // ตัวแปร Global ของระบบ
         // -----------------------------------------
-        // ⚠️ นำ URL ของเว็บแอปจาก GAS มาวางแทนที่ข้อความด้านล่างนี้ ⚠️
         const GAS_URL = "https://script.google.com/macros/s/AKfycbyJXSpLn5UKV4IazLX9gPDghXgyn26EopP9NVXA0qW561Zj2TRbUZ-rpsESUo2k0-F6Wg/exec"; 
-        let currentTxnId = ""; // ตัวแปรเก็บรหัสออเดอร์ปัจจุบัน
+        let currentTxnId = ""; 
         let currentOrderRef = null;
 
         // -----------------------------------------
@@ -296,10 +302,12 @@
         const orderStatus = document.getElementById('orderStatus');
         const qrBox = document.getElementById('qrBox');
         
-        // Element ของส่วน Slip Upload
+        // Element ของส่วนต่างๆ
         const slipUploadSection = document.getElementById('slipUploadSection');
         const uploadStatus = document.getElementById('uploadStatus');
         const slipFile = document.getElementById('slipFile');
+        const qrActionSection = document.getElementById('qrActionSection');
+        const btnDownloadQR = document.getElementById('btnDownloadQR');
 
         function addLog(message) {
             const time = new Date().toLocaleTimeString('th-TH');
@@ -334,9 +342,9 @@
             qrBox.innerHTML = `<span>SELECT ITEM<br>TO SHOW QR</span>`;
             qrBox.style.background = 'rgba(0,0,0,0.3)';
             
-            // รีเซ็ตส่วนอัปโหลดสลิป
             currentTxnId = "";
             slipUploadSection.style.display = 'none';
+            qrActionSection.style.display = 'none'; // ซ่อนปุ่มโหลด QR ด้วย
             uploadStatus.innerText = "";
             slipFile.value = "";
         }
@@ -369,8 +377,8 @@
                         qrBox.innerHTML = `<span style="color:#00ff64; font-weight:bold;">DISPENSING...</span>`;
                         qrBox.style.background = 'transparent';
                         
-                        // ซ่อนปุ่มอัปโหลดสลิปทันทีที่จ่ายสำเร็จ
                         slipUploadSection.style.display = 'none';
+                        qrActionSection.style.display = 'none'; // ซ่อนเมื่อสำเร็จ
                         
                         const stockElement = document.getElementById(`stock-${slot}`);
                         let currentStock = parseInt(stockElement.textContent);
@@ -405,7 +413,6 @@
                 return;
             }
 
-            // สร้างรหัสออเดอร์และเก็บไว้ใน Global Variable
             currentTxnId = 'TXN' + Date.now().toString().slice(-6);
 
             orderID.textContent = currentTxnId;
@@ -417,22 +424,36 @@
             qrBox.innerHTML = `<span style="color:var(--neon-blue);">GENERATING QR...</span>`;
             qrBox.style.background = 'rgba(0,0,0,0.3)';
             
-            // ซ่อนปุ่มอัปโหลดสลิปไว้ก่อนระหว่างรอโหลด QR
             slipUploadSection.style.display = 'none';
+            qrActionSection.style.display = 'none'; 
 
             addLog(`User selected ${name}. Requesting QR from GAS...`);
             
-            // ขอ QR Code จาก GAS
             fetch(`${GAS_URL}?amount=${price}&txnId=${currentTxnId}`)
                 .then(response => response.json())
                 .then(data => {
                     if(data.status === "success") {
-                        qrBox.innerHTML = `<img src="${data.qrUrl}" alt="PromptPay QR Code" style="max-width:100%; max-height:100%;">`;
+                        // แทรกรูปภาพและจัดให้สวยงาม
+                        qrBox.innerHTML = `<img src="${data.qrUrl}" alt="PromptPay QR Code" style="max-width:100%; max-height:100%; border-radius:8px;">`;
                         qrBox.style.background = 'white';
                         addLog(`QR Generated for ${currentTxnId}. Waiting for customer to scan.`);
                         
-                        // แสดงปุ่มอัปโหลดสลิปเมื่อ QR พร้อมแล้ว
+                        // แสดงปุ่มดำเนินการ
                         slipUploadSection.style.display = 'block';
+                        qrActionSection.style.display = 'block';
+                        
+                        // ตั้งค่าคำสั่งให้ปุ่มดาวน์โหลด
+                        btnDownloadQR.onclick = function() {
+                            // สร้าง link โหลด/เปิดรูปภาพ
+                            const a = document.createElement('a');
+                            a.href = data.qrUrl;
+                            a.download = `PromptPay_${currentTxnId}.png`;
+                            a.target = '_blank'; // สำหรับเปิดแท็บใหม่บนมือถือในกรณีที่เบราว์เซอร์กันการดาวน์โหลด
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            addLog(`User clicked download QR for ${currentTxnId}`);
+                        };
                         
                         createOrderInFirebase(currentTxnId, slot, name, price);
                     } else {
@@ -446,7 +467,7 @@
         }
 
         // -----------------------------------------
-        // 5. ฟังก์ชันอัปโหลดและตรวจสอบสลิป (ใหม่!)
+        // 5. ฟังก์ชันอัปโหลดและตรวจสอบสลิป
         // -----------------------------------------
         function uploadSlipToServer() {
             if (slipFile.files.length === 0) {
@@ -468,14 +489,11 @@
             uploadStatus.innerText = "กำลังตรวจสอบสลิป... กรุณารอสักครู่";
             addLog(`Reading slip image for ${currentTxnId}...`);
 
-            // เมื่อ FileReader อ่านไฟล์เสร็จ จะทำงานในนี้
             reader.onload = function(event) {
-                // ตัดเอาเฉพาะส่วนข้อมูล Base64 บริสุทธิ์
                 const base64Data = event.target.result.split(',')[1]; 
 
                 addLog("Sending slip image to GAS for verification...");
 
-                // ยิงข้อมูลไปที่ GAS_URL เดิม แต่ใช้แบบ POST Request
                 fetch(GAS_URL, {
                     method: 'POST',
                     body: JSON.stringify({
@@ -489,7 +507,8 @@
                     if(response.success) {
                         uploadStatus.style.color = "#00ff64";
                         uploadStatus.innerText = "✅ ตรวจสอบสำเร็จ! ตู้กำลังจ่ายสินค้า...";
-                        slipUploadSection.style.display = 'none'; // ซ่อนปุ่มอัปโหลด
+                        slipUploadSection.style.display = 'none'; 
+                        qrActionSection.style.display = 'none'; // ซ่อนปุ่ม QR เมื่อจ่ายเสร็จ
                         addLog(`Slip verified successfully!`);
                     } else {
                         uploadStatus.style.color = "red";
@@ -504,7 +523,6 @@
                 });
             };
             
-            // สั่งให้อ่านไฟล์ในรูปแบบ Data URL
             reader.readAsDataURL(file);
         }
 
