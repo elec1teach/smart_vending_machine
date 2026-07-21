@@ -347,7 +347,7 @@
             
             currentTxnId = "";
             slipUploadSection.style.display = 'none';
-            qrActionSection.style.display = 'none'; // ซ่อนกลุ่มปุ่ม QR 
+            qrActionSection.style.display = 'none'; 
             uploadStatus.innerText = "";
             slipFile.value = "";
         }
@@ -371,6 +371,8 @@
         }
 
         function listenForPaymentStatus(txnId, name, slot) {
+            let hasDeducted = false; // 🌟 ตัวแปรป้องกันการหักสต๊อกซ้ำซ้อน
+
             currentOrderRef.on('value', (snapshot) => {
                 const data = snapshot.val();
                 if (data) {
@@ -381,17 +383,22 @@
                         qrBox.style.background = 'transparent';
                         
                         slipUploadSection.style.display = 'none';
-                        qrActionSection.style.display = 'none'; // ซ่อนปุ่มเมื่อจ่ายเสร็จ
+                        qrActionSection.style.display = 'none'; 
                         
-                        const stockElement = document.getElementById(`stock-${slot}`);
-                        let currentStock = parseInt(stockElement.textContent);
-                        stockElement.textContent = currentStock - 1;
+                        // 🌟 เอาคำสั่งลดสต๊อกหน้า UI (แบบเก่า) ออกไป 
+                        // เพราะเดี๋ยวฟังก์ชัน syncStockFromFirebase จะซิงค์ข้อมูลให้เองเมื่อฐานข้อมูลเปลี่ยน
 
                         addLog(`Firebase: Status 'paid'. Hardware is dispensing ${name}.`);
                     } 
                     else if (data.status === 'success') {
                         orderStatus.textContent = 'THANK YOU';
                         addLog(`Firebase: Status 'success'. ${name} dispense complete.`);
+                        
+                        // 🌟 สั่งลดสต๊อกจริงๆ บน Firebase เมื่อสถานะเป็น Success
+                        if (!hasDeducted) {
+                            deductStock(slot);
+                            hasDeducted = true;
+                        }
                         
                         setTimeout(() => {
                             resetDashboard();
@@ -436,16 +443,13 @@
                 .then(response => response.json())
                 .then(data => {
                     if(data.status === "success") {
-                        // แทรกรูปภาพและจัดให้สวยงาม
                         qrBox.innerHTML = `<img src="${data.qrUrl}" alt="PromptPay QR Code" style="max-width:100%; max-height:100%; border-radius:8px;">`;
                         qrBox.style.background = 'white';
                         addLog(`QR Generated for ${currentTxnId}. Waiting for customer to scan.`);
                         
-                        // แสดงกลุ่มปุ่มดำเนินการ
                         slipUploadSection.style.display = 'block';
                         qrActionSection.style.display = 'block';
                         
-                        // 1. ตั้งค่าคำสั่งให้ปุ่มดาวน์โหลด (เซฟรูป)
                         btnDownloadQR.onclick = function() {
                             const a = document.createElement('a');
                             a.href = data.qrUrl;
@@ -457,10 +461,9 @@
                             addLog(`User clicked download QR for ${currentTxnId}`);
                         };
 
-                        // 2. ตั้งค่าคำสั่งให้ปุ่มคัดลอกเลขพร้อมเพย์
                         const btnCopyPromptPay = document.getElementById('btnCopyPromptPay');
                         btnCopyPromptPay.onclick = function() {
-                            const promptPayNumber = "0818768608"; // เบอร์พร้อมเพย์ของคุณ
+                            const promptPayNumber = "0818768608"; 
                             navigator.clipboard.writeText(promptPayNumber).then(() => {
                                 alert(`✅ คัดลอกเบอร์พร้อมเพย์ ${promptPayNumber} สำเร็จ!\n\nยอดเงินที่ต้องโอนคือ: ${price} บาท\nคุณสามารถเปิดแอปธนาคารเพื่อวางเบอร์และโอนเงินได้เลยครับ`);
                                 addLog(`User copied PromptPay number.`);
@@ -523,7 +526,7 @@
                         uploadStatus.style.color = "#00ff64";
                         uploadStatus.innerText = "✅ ตรวจสอบสำเร็จ! ตู้กำลังจ่ายสินค้า...";
                         slipUploadSection.style.display = 'none'; 
-                        qrActionSection.style.display = 'none'; // ซ่อนปุ่ม QR เมื่อจ่ายเสร็จ
+                        qrActionSection.style.display = 'none'; 
                         addLog(`Slip verified successfully!`);
                     } else {
                         uploadStatus.style.color = "red";
@@ -541,8 +544,54 @@
             reader.readAsDataURL(file);
         }
 
+        // -----------------------------------------
+        // 6. 🌟 ฟังก์ชันจัดการสต๊อก (เพิ่มใหม่ 🌟)
+        // -----------------------------------------
+        
+        // 6.1 ฟังก์ชันดึงและซิงค์สต๊อกแบบ Real-time
+        function syncStockFromFirebase() {
+            database.ref('stock').on('value', (snapshot) => {
+                const stockData = snapshot.val();
+                if (stockData) {
+                    // อัปเดต Slot 1
+                    if (stockData.slot1 !== undefined) {
+                        const stock1El = document.getElementById('stock-1');
+                        if (stock1El) stock1El.textContent = stockData.slot1;
+                        products.find(p => p.slot === 1).stock = stockData.slot1;
+                    }
+                    // อัปเดต Slot 2
+                    if (stockData.slot2 !== undefined) {
+                        const stock2El = document.getElementById('stock-2');
+                        if (stock2El) stock2El.textContent = stockData.slot2;
+                        products.find(p => p.slot === 2).stock = stockData.slot2;
+                    }
+                }
+            });
+        }
+
+        // 6.2 ฟังก์ชันสั่งลดสต๊อก
+        function deductStock(slotNumber) {
+            const stockRef = database.ref('stock/slot' + slotNumber);
+            stockRef.transaction(function(currentStock) {
+                if (currentStock !== null && currentStock > 0) {
+                    return currentStock - 1;
+                }
+                return currentStock;
+            }, function(error, committed, snapshot) {
+                if (error) {
+                    addLog(`[Error] ไม่สามารถอัปเดตสต๊อกได้: ${error}`);
+                } else if (committed) {
+                    addLog(`[Success] อัปเดตสต๊อก Slot ${slotNumber} สำเร็จ! เหลือ: ${snapshot.val()}`);
+                }
+            });
+        }
+
+        // -----------------------------------------
+        // การเริ่มต้นระบบ
+        // -----------------------------------------
         window.onload = () => {
             renderProducts();
+            syncStockFromFirebase(); // 🌟 สั่งให้ดึงสต๊อกทันทีเมื่อเปิดหน้าเว็บ
         };
     </script>
 </body>
